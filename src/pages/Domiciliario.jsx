@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
-import { QrCode, Package, CheckCircle, X, Loader2, Search, AlertCircle } from 'lucide-react'
+import { QrCode, Package, CheckCircle, X, Loader2, Search, AlertCircle, MapPin } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function Domiciliario() {
@@ -14,9 +14,13 @@ export default function Domiciliario() {
   
   const scannerRef = useRef(null)
   const html5QrRef = useRef(null)
+  const watchIdRef = useRef(null)
 
   useEffect(() => {
     initDomiciliario()
+    return () => {
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
+    }
   }, [])
 
   const initDomiciliario = async () => {
@@ -33,9 +37,30 @@ export default function Domiciliario() {
       setDomiciliario(data)
       fetchGuias(data.id)
       subscribeToChanges(data.id)
+      startTracking(data.id)
     } catch (err) {
       console.error('Error inicializando domiciliario:', err.message)
     }
+  }
+
+  const startTracking = (domId) => {
+    if (!navigator.geolocation) return
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords
+        await supabase
+          .from('domiciliarios')
+          .update({ 
+            latitud: latitude, 
+            longitud: longitude, 
+            ultima_ubicacion: new Date().toISOString() 
+          })
+          .eq('id', domId)
+      },
+      (err) => console.warn('Error de rastreo GPS:', err.message),
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    )
   }
 
   const fetchGuias = async (domId) => {
@@ -116,7 +141,6 @@ export default function Domiciliario() {
         }
       }
       
-      // La lista se actualizará vía Realtime o fetchGuias manual si falla
       fetchGuias()
 
     } catch (err) {
@@ -127,12 +151,27 @@ export default function Domiciliario() {
   }
 
   const markAsDelivered = async (id) => {
+    // Intentar obtener ubicación antes de marcar
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => updateDeliveryStatus(id, pos.coords.latitude, pos.coords.longitude),
+        () => updateDeliveryStatus(id, null, null),
+        { timeout: 5000 }
+      )
+    } else {
+      updateDeliveryStatus(id, null, null)
+    }
+  }
+
+  const updateDeliveryStatus = async (id, lat, lng) => {
     try {
       const { error } = await supabase
         .from('guias')
         .update({ 
           entregado: true, 
-          fecha_entrega: new Date().toISOString() 
+          fecha_entrega: new Date().toISOString(),
+          latitud: lat,
+          longitud: lng
         })
         .eq('id', id)
       
@@ -167,13 +206,17 @@ export default function Domiciliario() {
 
   return (
     <div className="flex flex-col gap-4 max-w-lg mx-auto w-full pb-10">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between px-1">
         <div>
           <h1 className="text-xl font-black text-[#1a1a1a] tracking-tight">Mi Ruta</h1>
-          <p className="text-gray-500 text-xs mt-0.5">Repartidor: <span className="font-bold text-[#FF6B00]">{domiciliario?.nombre || '...'}</span></p>
+          <p className="text-gray-500 text-xs mt-0.5 flex items-center gap-1">
+            <MapPin size={10} className="text-[#FF6B00]" />
+            Repartidor: <span className="font-bold text-[#FF6B00]">{domiciliario?.nombre || '...'}</span>
+          </p>
         </div>
-        <div className="bg-orange-50 text-[#FF6B00] px-2 py-1 rounded text-[10px] font-black uppercase border border-orange-100">
-          En línea
+        <div className="bg-orange-50 text-[#FF6B00] px-2 py-1 rounded text-[10px] font-black uppercase border border-orange-100 flex items-center gap-1">
+          <div className="w-1.5 h-1.5 bg-[#FF6B00] rounded-full animate-pulse" />
+          Rastreando
         </div>
       </div>
 

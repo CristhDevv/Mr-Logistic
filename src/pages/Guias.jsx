@@ -1,12 +1,29 @@
-import { useState, useEffect } from 'react'
-import { Search, Save, Loader2, Package, MapPin, Trash2, ArrowRight } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { Search, Save, Loader2, Package, MapPin, Trash2, ArrowRight, Filter, X, Calendar, RefreshCcw, FileSpreadsheet, Printer } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import * as XLSX from 'xlsx'
+import { useReactToPrint } from 'react-to-print'
+import FacturaPOS from '../components/FacturaPOS'
 
 export default function Guias() {
   const [guias, setGuias] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [selectedGuia, setSelectedGuia] = useState(null)
+  
+  const componentRef = useRef()
+
+  // Filter States
+  const today = new Date().toISOString().split('T')[0]
+  const initialFilters = {
+    fecha: today,
+    tipo: 'todos',
+    metodo_pago: 'todos',
+    bajado_sistema: 'todos',
+    registrado_por: 'todos'
+  }
+  const [filters, setFilters] = useState(initialFilters)
 
   // Form State
   const [formData, setFormData] = useState({
@@ -117,9 +134,75 @@ export default function Guias() {
     }
   }
 
-  const filtered = guias.filter(g =>
-    g.numero_guia.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = useMemo(() => {
+    return guias.filter(g => {
+      // Búsqueda por número
+      const matchesSearch = g.numero_guia.toLowerCase().includes(search.toLowerCase())
+      
+      // Filtro de fecha
+      const matchesDate = !filters.fecha || g.fecha_registro.startsWith(filters.fecha)
+      
+      // Filtro de tipo
+      const matchesType = filters.tipo === 'todos' || g.tipo === filters.tipo
+      
+      // Filtro de método de pago
+      const matchesPayment = filters.metodo_pago === 'todos' || g.metodo_pago === filters.metodo_pago
+      
+      // Filtro de bajado sistema
+      const matchesSystem = filters.bajado_sistema === 'todos' || 
+        (filters.bajado_sistema === 'pendiente' ? !g.bajado_sistema : g.bajado_sistema)
+      
+      // Filtro de registrado por
+      const matchesRegistrar = filters.registrado_por === 'todos' || 
+        (filters.registrado_por === 'oficina' ? !g.domiciliario_id : !!g.domiciliario_id)
+      
+      return matchesSearch && matchesDate && matchesType && matchesPayment && matchesSystem && matchesRegistrar
+    })
+  }, [guias, search, filters])
+
+  const stats = useMemo(() => {
+    const totalMonto = filtered.reduce((acc, g) => acc + (parseFloat(g.monto) || 0), 0)
+    const entregadasDom = filtered.filter(g => g.domiciliario_id && g.entregado).length
+    return {
+      total: filtered.length,
+      monto: totalMonto,
+      entregadasDom
+    }
+  }, [filtered])
+
+  const exportToExcel = () => {
+    const data = filtered.map(g => ({
+      'Número Guía': g.numero_guia,
+      'Tipo': g.tipo,
+      'Método Pago': g.metodo_pago,
+      'Valor': g.monto,
+      'Bajado Sistema': g.bajado_sistema ? 'SÍ' : 'NO',
+      'Entregado': g.entregado ? 'SÍ' : 'NO',
+      'Registrado por': g.domiciliarios?.nombre || 'Oficina',
+      'Fecha Registro': new Date(g.fecha_registro).toLocaleString()
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Guías')
+    
+    const dateStr = filters.fecha || new Date().toISOString().split('T')[0]
+    XLSX.writeFile(wb, `MrLogistic_Guias_${dateStr}.xlsx`)
+  }
+
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: 'Factura POS',
+    onAfterPrint: () => setSelectedGuia(null)
+  });
+
+  const triggerPrint = (guia) => {
+    setSelectedGuia(guia);
+    // Un pequeño delay para asegurar que el componente se renderice con la nueva guía
+    setTimeout(() => {
+      handlePrint();
+    }, 100);
+  }
 
   const paymentColors = {
     nequi: 'bg-[#FF6B00]/10 text-[#FF6B00] border-[#FF6B00]/20',
@@ -132,11 +215,11 @@ export default function Guias() {
     entrega: 'bg-purple-100 text-purple-700'
   }
 
-  const PillButton = ({ label, value, active, onClick }) => (
+  const PillButton = ({ label, value, active, onClick, small }) => (
     <button
       type="button"
       onClick={onClick}
-      className={`px-4 py-1.5 text-xs font-bold rounded-full border transition-all duration-200 whitespace-nowrap ${
+      className={`${small ? 'px-3 py-1 text-[10px]' : 'px-4 py-1.5 text-xs'} font-bold rounded-full border transition-all duration-200 whitespace-nowrap ${
         active 
           ? 'bg-[#FF6B00] border-[#FF6B00] text-white shadow-sm' 
           : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
@@ -148,6 +231,9 @@ export default function Guias() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Factura POS (Oculta) */}
+      <FacturaPOS ref={componentRef} guia={selectedGuia} />
+
       {/* Header & Search */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -167,8 +253,11 @@ export default function Guias() {
         </div>
       </div>
 
-      {/* Formulario Inline (Sin cards, borde a la izquierda) */}
+      {/* Formulario de Registro */}
       <div className="bg-white border-l-4 border-[#FF6B00] border-y border-r border-gray-200 p-5 relative z-10">
+        <h3 className="text-[10px] font-black uppercase text-[#FF6B00] mb-4 tracking-widest flex items-center gap-2">
+           <Save size={14} /> Registro Rápido
+        </h3>
         <form onSubmit={handleSubmit} className="flex flex-wrap xl:flex-nowrap gap-6 items-end">
           <div className="w-full lg:w-40 space-y-2">
             <label className="text-[10px] font-bold uppercase text-gray-400">Número Guía</label>
@@ -252,8 +341,133 @@ export default function Guias() {
         </form>
       </div>
 
+      {/* Barra de Filtros Avanzados */}
+      <div className="bg-white border border-gray-200 p-5 rounded-xl shadow-sm space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest flex items-center gap-2">
+             <Filter size={14} className="text-[#FF6B00]" /> Filtros Avanzados
+          </h3>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={exportToExcel}
+              className="text-[10px] font-black uppercase border border-emerald-500 text-emerald-600 px-3 py-1 rounded hover:bg-emerald-50 flex items-center gap-2 transition-colors"
+            >
+              <FileSpreadsheet size={12} /> Exportar día
+            </button>
+            <button 
+              onClick={() => setFilters(initialFilters)}
+              className="text-[10px] font-black uppercase text-[#FF6B00] hover:text-[#e66000] flex items-center gap-1 transition-colors"
+            >
+              <RefreshCcw size={12} /> Limpiar Filtros
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          {/* Fecha */}
+          <div className="space-y-2">
+            <label className="text-[9px] font-black uppercase text-gray-400 flex items-center gap-1">
+              <Calendar size={10} /> Fecha Registro
+            </label>
+            <input 
+              type="date" 
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:border-[#FF6B00]"
+              value={filters.fecha}
+              onChange={e => setFilters({...filters, fecha: e.target.value})}
+            />
+          </div>
+
+          {/* Tipo */}
+          <div className="space-y-2">
+            <label className="text-[9px] font-black uppercase text-gray-400">Tipo de Servicio</label>
+            <div className="flex flex-wrap gap-2">
+              {['todos', 'envio', 'entrega'].map(opt => (
+                <PillButton 
+                  key={opt}
+                  small
+                  label={opt === 'todos' ? 'Todos' : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  active={filters.tipo === opt}
+                  onClick={() => setFilters({...filters, tipo: opt})}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Método Pago */}
+          <div className="space-y-2">
+            <label className="text-[9px] font-black uppercase text-gray-400">Método de Pago</label>
+            <div className="flex flex-wrap gap-2">
+              {['todos', 'nequi', 'pago_directo', 'efectivo'].map(opt => (
+                <PillButton 
+                  key={opt}
+                  small
+                  label={opt === 'todos' ? 'Todos' : opt.replace('_', ' ')}
+                  active={filters.metodo_pago === opt}
+                  onClick={() => setFilters({...filters, metodo_pago: opt})}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Bajado Sistema */}
+          <div className="space-y-2">
+            <label className="text-[9px] font-black uppercase text-gray-400">Estado Sistema</label>
+            <div className="flex flex-wrap gap-2">
+              {['todos', 'pendiente', 'sincronizado'].map(opt => (
+                <PillButton 
+                  key={opt}
+                  small
+                  label={opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  active={filters.bajado_sistema === opt}
+                  onClick={() => setFilters({...filters, bajado_sistema: opt})}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Registrado por */}
+          <div className="space-y-2">
+            <label className="text-[9px] font-black uppercase text-gray-400">Registrado por</label>
+            <div className="flex flex-wrap gap-2">
+              {['todos', 'oficina', 'domiciliario'].map(opt => (
+                <PillButton 
+                  key={opt}
+                  small
+                  label={opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  active={filters.registrado_por === opt}
+                  onClick={() => setFilters({...filters, registrado_por: opt})}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Resumen Rápido Filtrado */}
+        <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center gap-x-6 gap-y-2">
+           <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase">Guías:</span>
+              <span className="text-xs font-black text-[#1a1a1a]">{stats.total}</span>
+           </div>
+           <div className="w-px h-3 bg-gray-200 hidden sm:block" />
+           <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase">Valor Total:</span>
+              <span className="text-xs font-black text-emerald-600">${stats.monto.toLocaleString('es-CO')}</span>
+           </div>
+           <div className="w-px h-3 bg-gray-200 hidden sm:block" />
+           <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase">Entregadas Dom:</span>
+              <span className="text-xs font-black text-blue-600">{stats.entregadasDom}</span>
+           </div>
+           <div className="flex-1 text-right">
+              <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+                Mostrando {filtered.length} de {guias.length} guías totales
+              </span>
+           </div>
+        </div>
+      </div>
+
       {/* Tabla (Flat layout) */}
-      <div className="bg-white border border-gray-200 w-full overflow-x-auto">
+      <div className="bg-white border border-gray-200 w-full overflow-x-auto rounded-xl">
         <table className="w-full text-left whitespace-nowrap">
           <thead>
             <tr className="bg-[#FFF0E6] border-b border-[#FF6B00]/20">
@@ -270,15 +484,15 @@ export default function Guias() {
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan="7" className="px-4 py-12 text-center text-gray-400">
+                <td colSpan="8" className="px-4 py-12 text-center text-gray-400">
                   <Loader2 className="animate-spin mx-auto mb-2 text-[#FF6B00]" size={24} />
                   Cargando datos...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan="7" className="px-4 py-12 text-center text-gray-400 text-sm">
-                  Sin registros
+                <td colSpan="8" className="px-4 py-12 text-center text-gray-400 text-sm">
+                  Sin registros que coincidan con los filtros
                 </td>
               </tr>
             ) : (
@@ -333,13 +547,22 @@ export default function Guias() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button 
-                      onClick={() => handleDelete(g.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                      title="Eliminar"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => triggerPrint(g)}
+                        className="text-gray-400 hover:text-[#FF6B00] transition-colors p-1"
+                        title="Imprimir Factura POS"
+                      >
+                        <Printer size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(g.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
