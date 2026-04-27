@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-[#FAFAFA] text-[#1a1a1a];
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+}
