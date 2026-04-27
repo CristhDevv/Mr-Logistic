@@ -43,7 +43,7 @@ export default function Guias() {
       setLoading(true)
       const { data, error } = await supabase
         .from('guias')
-        .select('*')
+        .select('*, domiciliarios(nombre)')
         .order('fecha_registro', { ascending: false })
       
       if (error) throw error
@@ -259,6 +259,7 @@ export default function Guias() {
             <tr className="bg-[#FFF0E6] border-b border-[#FF6B00]/20">
               <th className="px-4 py-3 text-[#CC5500] font-black uppercase text-[10px] tracking-widest">Número</th>
               <th className="px-4 py-3 text-[#CC5500] font-black uppercase text-[10px] tracking-widest">Tipo</th>
+              <th className="px-4 py-3 text-[#CC5500] font-black uppercase text-[10px] tracking-widest">Registrado por</th>
               <th className="px-4 py-3 text-[#CC5500] font-black uppercase text-[10px] tracking-widest">Valor</th>
               <th className="px-4 py-3 text-[#CC5500] font-black uppercase text-[10px] tracking-widest">Pago</th>
               <th className="px-4 py-3 text-[#CC5500] font-black uppercase text-[10px] tracking-widest">Sistema</th>
@@ -297,6 +298,11 @@ export default function Guias() {
                         </span>
                       )}
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                      {g.domiciliarios?.nombre || 'Oficina / Panel'}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="font-bold text-[#1a1a1a] text-sm">
