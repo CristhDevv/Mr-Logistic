@@ -119,57 +119,63 @@ export default function Domiciliario() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-lg mx-auto w-full pb-20">
-      <div>
-        <h1 className="text-2xl font-black text-[#1a1a1a] tracking-tight">Mi Ruta</h1>
-        <p className="text-gray-500 text-sm mt-1">Escanea y entrega tus guías del día</p>
+    <div className="flex flex-col gap-4 max-w-lg mx-auto w-full pb-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-black text-[#1a1a1a] tracking-tight">Mi Ruta</h1>
+          <p className="text-gray-500 text-xs mt-0.5">Escaneo y entregas del día</p>
+        </div>
+        <div className="bg-orange-50 text-[#FF6B00] px-2 py-1 rounded text-[10px] font-black uppercase border border-orange-100">
+          En línea
+        </div>
       </div>
 
       {/* Sección 1: Escáner */}
-      <div className="bg-white border-l-4 border-[#FF6B00] border-y border-r border-gray-200 p-5 flex flex-col items-center justify-center text-center">
+      <div className="bg-white border-l-4 border-[#FF6B00] border-y border-r border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm">
         {scanning ? (
           <div className="w-full relative">
             <div id="qr-reader" className="w-full rounded-lg overflow-hidden border border-gray-200 bg-black aspect-square" />
             <button
               onClick={stopScanner}
-              className="mt-4 w-full bg-red-50 text-red-600 hover:bg-red-100 px-4 py-3 font-bold transition-colors flex items-center justify-center gap-2 rounded border border-red-200"
+              className="mt-3 w-full bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2.5 font-bold transition-colors flex items-center justify-center gap-2 rounded border border-red-200 text-sm"
             >
-              <X size={20} />
-              Detener Escáner
+              <X size={18} />
+              Cerrar Cámara
             </button>
           </div>
         ) : (
-          <>
-            <div className="w-16 h-16 bg-[#FF6B00]/10 text-[#FF6B00] rounded-full flex items-center justify-center mb-4">
-              <QrCode size={32} />
+          <div className="w-full flex flex-col items-center">
+            <div className="w-12 h-12 bg-[#FF6B00]/10 text-[#FF6B00] rounded-full flex items-center justify-center mb-3">
+              <QrCode size={24} />
             </div>
-            <h3 className="text-base font-bold text-[#1a1a1a] mb-2">Escanear Guía</h3>
-            <p className="text-xs text-gray-500 mb-6">Usa la cámara para agregar guías a tu lista de entregas.</p>
+            <h3 className="text-sm font-bold text-[#1a1a1a] mb-1">Escanear Guía</h3>
+            <p className="text-[11px] text-gray-400 mb-4 px-4">Añade guías escaneando el código de barras o QR.</p>
 
             <button
               onClick={startScanner}
               disabled={loadingCode}
-              className="w-full bg-[#FF6B00] hover:bg-[#e66000] disabled:opacity-50 text-white px-4 py-3.5 font-black transition-colors flex items-center justify-center gap-2 shadow-md shadow-orange-200"
+              className="w-full bg-[#FF6B00] hover:bg-[#e66000] disabled:opacity-50 text-white px-4 py-3 font-black transition-colors flex items-center justify-center gap-2 shadow-md shadow-orange-100 rounded text-sm"
             >
-              {loadingCode ? <Loader2 className="animate-spin" size={20} /> : <QrCode size={20} />}
+              {loadingCode ? <Loader2 className="animate-spin" size={18} /> : <QrCode size={18} />}
               {loadingCode ? 'Buscando...' : 'Escanear Ahora'}
             </button>
-          </>
+          </div>
         )}
 
         {errorMsg && (
-          <div className="w-full mt-4 bg-red-50 border border-red-200 px-4 py-3 text-red-700 text-sm font-bold rounded">
+          <div className="w-full mt-3 bg-red-50 border border-red-100 px-3 py-2 text-red-600 text-[11px] font-bold rounded">
             {errorMsg}
           </div>
         )}
       </div>
 
-      {/* Buscador Manual de Emergencia */}
-      <div className="bg-white border border-gray-200 p-4 flex gap-2">
+      {/* Buscador Manual Minimalista */}
+      <div className="bg-white border border-gray-200 p-3 flex gap-2 shadow-sm rounded">
+         <Search size={16} className="text-gray-300 mt-1" />
          <input 
             type="text" 
-            placeholder="O ingresar código manual..." 
-            className="flex-1 bg-[#FAFAFA] border border-gray-200 px-3 py-2 text-sm focus:border-[#FF6B00] outline-none"
+            placeholder="Ingresar número manual..." 
+            className="flex-1 bg-transparent text-sm focus:outline-none font-bold placeholder:font-normal placeholder:text-gray-300"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.target.value) {
                 searchGuide(e.target.value);
@@ -180,47 +186,54 @@ export default function Domiciliario() {
       </div>
 
       {/* Sección 2: Lista de Entregas */}
-      <div>
-        <h3 className="text-sm font-black uppercase text-[#1a1a1a] mb-4 flex items-center gap-2">
-          <Package size={18} className="text-[#FF6B00]" />
-          Por Entregar ({guias.length})
-        </h3>
+      <div className="mt-2">
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h3 className="text-[11px] font-black uppercase text-gray-400 tracking-wider flex items-center gap-2">
+            <Package size={14} className="text-[#FF6B00]" />
+            Pendientes ({guias.length})
+          </h3>
+          {guias.length > 0 && (
+            <button className="text-[10px] font-bold text-[#FF6B00] hover:underline" onClick={() => setGuias([])}>
+              Limpiar todo
+            </button>
+          )}
+        </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {guias.length === 0 ? (
-            <div className="bg-[#FAFAFA] border border-gray-200 border-dashed p-8 text-center text-gray-400 text-sm font-bold">
-              Escanea una guía para comenzar tu ruta.
+            <div className="bg-white border border-gray-100 border-dashed py-8 px-4 text-center text-gray-300 text-[11px] font-bold rounded">
+              No tienes guías cargadas para entrega.
             </div>
           ) : (
             guias.map((g) => (
-              <div key={g.id} className="bg-white border border-gray-200 p-4 shadow-sm flex flex-col gap-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-black text-[#1a1a1a] text-lg">{g.numero_guia}</h4>
-                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${paymentColors[g.metodo_pago] || 'bg-gray-100'}`}>
+              <div key={g.id} className="bg-white border border-gray-100 p-3 shadow-sm rounded flex flex-col gap-2">
+                <div className="flex justify-between items-center">
+                  <div className="flex flex-col">
+                    <span className="font-black text-[#1a1a1a] text-sm">{g.numero_guia}</span>
+                    <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-[4px] text-[8px] font-black uppercase border w-fit ${paymentColors[g.metodo_pago] || 'bg-gray-100'}`}>
                       {g.metodo_pago?.replace('_', ' ')}
                     </span>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] uppercase font-bold text-gray-400">Valor a cobrar</p>
-                    <p className="font-black text-emerald-600 text-lg">
+                    <p className="text-[9px] uppercase font-bold text-gray-300">Cobrar</p>
+                    <p className="font-black text-emerald-600 text-sm">
                       ${parseFloat(g.monto).toLocaleString('es-CO')}
                     </p>
                   </div>
                 </div>
 
                 {g.observaciones && (
-                  <div className="bg-[#FFF0E6] p-2 text-xs text-[#CC5500] font-medium border-l-2 border-[#FF6B00]">
-                    <strong>Nota:</strong> {g.observaciones}
+                  <div className="bg-orange-50/50 p-1.5 text-[10px] text-[#CC5500] font-bold border-l-2 border-[#FF6B00] rounded-r">
+                    {g.observaciones}
                   </div>
                 )}
 
                 <button
                   onClick={() => markAsDelivered(g.id)}
-                  className="mt-2 w-full bg-[#1a1a1a] hover:bg-black text-white px-4 py-3 font-bold transition-colors flex items-center justify-center gap-2"
+                  className="mt-1 w-full bg-[#1a1a1a] hover:bg-black text-white px-4 py-2.5 font-bold transition-colors flex items-center justify-center gap-2 rounded text-xs shadow-sm"
                 >
-                  <CheckCircle size={18} />
-                  Marcar Entregado
+                  <CheckCircle size={16} />
+                  Confirmar Entrega
                 </button>
               </div>
             ))
